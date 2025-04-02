@@ -5,9 +5,6 @@
 
 [![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&width=435&lines=Hi+there+👋+!;I'm+Jakub;Welcome+to+my+GitHub!)](https://git.io/typing-svg)
 
-</div>
-<div align="center">
-
 ### Software Developer / Computer Science Student
 
 <br>
