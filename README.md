@@ -3,14 +3,7 @@
 <div align="center">
 
 
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&width=435&lines=Hi+there!;I'm+Jakub;Welcome+to+my+GitHub!)](https://git.io/typing-svg)      
-
-# Hi <img src="https://raw.githubusercontent.com/MartinHeinz/MartinHeinz/master/wave.gif" width="30px">, I'm Jakub
-
-<!--
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&width=435&lines=Hello+World;I'm+Bleidhu;How+are+things%3F)](https://git.io/typing-svg)      
-# Hi <img src="https://raw.githubusercontent.com/MartinHeinz/MartinHeinz/master/wave.gif" width="30px">, I'm [Jakub]
--->
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&width=435&lines=👋+Hi+there!;I'm+Jakub;Welcome+to+my+GitHub!)](https://git.io/typing-svg)      
 
 ### Software Developer | Computer Science Student
 
@@ -45,7 +38,7 @@
 
 ## 🚀 Languages that I know
 
-[![Languages](https://skillicons.dev/icons?i=py,c,cpp,erlang,sqlite,mysql,bash&perline=8)](https://skillicons.dev)
+[![Languages](https://skillicons.dev/icons?i=py,c,cpp,erlang,sqlite,mysql,bash&perline=7)](https://skillicons.dev)
 
 ## 🛠️ Technologies I have worked with
 
