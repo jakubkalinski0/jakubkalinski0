@@ -3,7 +3,7 @@
 <div align="center">
 
 
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&width=100&lines=Hi+there+👋+!;I'm+Jakub;Welcome+to+my+GitHub!)](https://git.io/typing-svg)      
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&width=1&lines=Hi+there+👋+!;I'm+Jakub;Welcome+to+my+GitHub!)](https://git.io/typing-svg)      
 
 ### Software Developer | Computer Science Student
 
