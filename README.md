@@ -15,17 +15,19 @@
 
 ### Key facts
 
-- 💼 **Backend Developer**, working with **FastAPI**, **SQLite**, **Python**, and **SQL** on API development and database management.
+- 💼 **Computer Science Student**, for now working mainly with **Python**, **Java**, **SQL**.
 
-- 💻 Experienced in **C** and **Erlang**, working on **operating systems projects** and **list processing functions**.
+- 🧠 Currently learning **Rust**, **Erlang**, **C** and getting to know **Operating Systems** better.
+
+- 💻 Experienced in **Python** and **Java**, working on **operating systems projects** and **list processing functions**.
 
 - 👨‍🎓 Currently pursuing **Bachelor's degree** in **Computer Science** at **AGH University of Science and Technology**.
 
-- 🚀 Passionate about backend development, databases, and optimizing API performance.
+- 🎯 Currently focused on learning new languages and exploring the field of Computer Science to it's fullest.
 
-- 🖥️ Working on personal projects, including **a waste classification API** powered by FastAPI and SQLite.
+- 🚀 Working on personal projects, including **a Multistage Morris with AI** which is being prepared for a scientific conference.
 
-- 🎯 Enthusiast of **Linux** (WSL/Ubuntu) and **GitHub workflow**, actively developing coursework projects using **GitHub branches and commits**.
+- 🌲 In my spare time I enjoy woodworking!.
 
 - 🏆 1st place winner at **SWM Hackathon 2025**, together with my team:
 
@@ -38,7 +40,7 @@
 
 ## 🚀 Languages that I know
 
-[![Languages](https://skillicons.dev/icons?i=py,c,cpp,erlang,sqlite,mysql,bash&perline=7)](https://skillicons.dev)
+[![Languages](https://skillicons.dev/icons?i=py,c,java,cpp,erlang,rust,sqlite,mysql,bash,&perline=7)](https://skillicons.dev)
 
 ## 🛠️ Technologies I have worked with
 
