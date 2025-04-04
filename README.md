@@ -17,7 +17,7 @@
 
 - 💼 **Computer Science Student**, for now working mainly with **Python**, **Java**, **SQL**.
 
-- 🧠 Currently learning **Rust**, **Erlang**, **C** and getting to know **Operating Systems** better.
+- 🧠 Currently learning **Rust**, **Erlang**, **C** and trying to get to know **Operating Systems** better.
 
 - 💻 Experienced in **Python** and **Java**, working on **operating systems projects** and **list processing functions**.
 
