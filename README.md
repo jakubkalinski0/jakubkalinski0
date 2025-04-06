@@ -40,7 +40,7 @@
 
 ## 🚀 Languages that I know
 
-[![Languages](https://skillicons.dev/icons?i=py,c,java,cpp,erlang,rust,sqlite,mysql,bash,&perline=7)](https://skillicons.dev)
+[![Languages](https://skillicons.dev/icons?i=py,c,java,cpp,erlang,rust,sqlite,mysql,bash,&perline=6)](https://skillicons.dev)
 
 ## 🛠️ Technologies I have worked with
 
