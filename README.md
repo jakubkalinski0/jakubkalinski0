@@ -2,11 +2,7 @@
 
 <div align="center">
 
-<div align="center">
-  <a href="https://git.io/typing-svg">
-    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&width=435&lines=%20%20%20%20%20%20%20%20%20%20%20Hi+there+👋+!;%20%20%20%20%20%20%20%20%20%20%20I'm+Jakub;%20%20%20%20%20%20%20%20%20%20%20Welcome+to+my+GitHub!" alt="Typing SVG" />
-  </a>
-</div>
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&width=100&lines=Hi+there+👋+!;I'm+Jakub;Welcome+to+my+GitHub!)](https://git.io/typing-svg)   
 
 ### Software Developer / Computer Science Student
 
