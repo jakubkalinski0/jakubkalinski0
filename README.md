@@ -18,7 +18,7 @@
 
 - 🧠 Currently learning **Rust**, **Erlang**, **C** and trying to get to know **Operating Systems** better.
 
-- 💻 Experienced in **Python** and **Java**, working on **operating systems projects** and **list processing functions**.
+- 💻 Experienced in **Python** and **Java**, working on **prospering as a student** 😁.
 
 - 👨‍🎓 Currently pursuing **Bachelor's degree** in **Computer Science** at **AGH University of Science and Technology**.
 
@@ -26,7 +26,7 @@
 
 - 🚀 Working on personal projects, including **a Multistage Morris with AI** which is being prepared for a scientific conference.
 
-- 🌲 In my spare time I enjoy woodworking!.
+- 🌲 In my spare time I enjoy woodworking!
 
 - 🏆 1st place winner at **SWM Hackathon 2025**, together with my team:
 
@@ -39,7 +39,7 @@
 
 ## 🚀 Languages that I know
 
-[![Languages](https://skillicons.dev/icons?i=py,c,java,cpp,erlang,rust,sqlite,mysql,bash,&perline=6)](https://skillicons.dev)
+[![Languages](https://skillicons.dev/icons?i=py,c,java,cpp,rust,sqlite,mysql,bash,&perline=6)](https://skillicons.dev)
 
 ## 🛠️ Technologies I have worked with
 
