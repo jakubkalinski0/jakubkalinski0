@@ -285,7 +285,7 @@
     'TypeScript', 'JavaScript', 'Python', 'C', 'Java', 'SQL', 'HTML', 'CSS', 'Bash',
   ];
   var myLanguagesExtra = [
-    'C++', 'Rust', 'Shell', 'PowerShell', 'Markdown', 'Elixir', 'Erlang', 'Haskell', 'Julia', 'Kotlin', 'R', 'Swift',
+    'C++', 'Rust', 'Elixir', 'Erlang', 'Haskell', 'Julia', 'R',
   ];
   var myFrameworks = [
     'React', 'Next.js', 'React Native', 'FastAPI', 'PyTorch', 'TensorFlow', 'scikit-learn',
