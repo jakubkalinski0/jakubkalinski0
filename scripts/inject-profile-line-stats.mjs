@@ -1,9 +1,17 @@
 /**
- * Sums GitHub "contributors" additions/deletions for the profile owner across repos.
- * Writes readme.source.build.md (inject numbers into @@profile-line-stats block).
+ * Injects readme.source.build.md with profile aggregates.
  *
- * - With PROFILE_LINE_STATS_TOKEN (PAT, repo read): /user/repos?affiliation=owner (public + private you own).
- * - Otherwise: /users/{owner}/repos?type=owner (public repos only) + GITHUB_TOKEN if present.
+ * Repos / Stars: all repositories you *own* (paginated). PAT = private too; else public owned only.
+ *
+ * Lines +/− and "contributor" commit sum: per-repo GET stats/contributors (your row, default branch,
+ * weekly buckets) — only for repos we iterate (owned list). Same source as line counts.
+ *
+ * Commits (card): max( sum of those weekly "c" , Search API total_count for author:LOGIN ).
+ *   Search includes commits on repos you do *not* own (orgs, forks you contributed to), within
+ *   GitHub's index and visibility rules. Not a raw `git rev-list --all` — GitHub does not expose that.
+ *
+ * PAT PROFILE_LINE_STATS_TOKEN: /user/repos?affiliation=owner.
+ * Else: /users/{login}/repos?type=owner + GITHUB_TOKEN.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -16,7 +24,7 @@ const token = pat || ghToken;
 const HEADERS_BASE = {
   Accept: 'application/vnd.github+json',
   'X-GitHub-Api-Version': '2022-11-28',
-  'User-Agent': 'jakubkalinski0-profile-line-stats',
+  'User-Agent': 'jakubkalinski0-profile-stats-inject',
 };
 
 function sleep(ms) {
@@ -28,6 +36,16 @@ async function ghFetch(url, opts = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(url, { ...opts, headers });
   return res;
+}
+
+function repoRow(r, login) {
+  if (!r.owner?.login || r.owner.login.toLowerCase() !== login.toLowerCase()) return null;
+  return {
+    owner: r.owner.login,
+    name: r.name,
+    stars: r.stargazers_count ?? 0,
+    forks: r.forks_count ?? 0,
+  };
 }
 
 async function listReposPat(login) {
@@ -43,9 +61,8 @@ async function listReposPat(login) {
     const batch = await res.json();
     if (!Array.isArray(batch) || batch.length === 0) break;
     for (const r of batch) {
-      if (r.owner?.login?.toLowerCase() === login.toLowerCase()) {
-        repos.push({ owner: r.owner.login, name: r.name });
-      }
+      const row = repoRow(r, login);
+      if (row) repos.push(row);
     }
     if (batch.length < 100) break;
   }
@@ -65,14 +82,19 @@ async function listReposPublic(login) {
     const batch = await res.json();
     if (!Array.isArray(batch) || batch.length === 0) break;
     for (const r of batch) {
-      repos.push({ owner: r.owner.login, name: r.name });
+      repos.push({
+        owner: r.owner.login,
+        name: r.name,
+        stars: r.stargazers_count ?? 0,
+        forks: r.forks_count ?? 0,
+      });
     }
     if (batch.length < 100) break;
   }
   return repos;
 }
 
-async function contributorAddsDels(repoOwner, repoName, login) {
+async function contributorStats(repoOwner, repoName, login) {
   const url = `https://api.github.com/repos/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}/stats/contributors`;
   for (let attempt = 0; attempt < 10; attempt++) {
     const res = await ghFetch(url);
@@ -80,26 +102,45 @@ async function contributorAddsDels(repoOwner, repoName, login) {
       await sleep(800 + attempt * 400);
       continue;
     }
-    if (res.status === 404) return { added: 0, deleted: 0 };
+    if (res.status === 404) return { added: 0, deleted: 0, commits: 0 };
     if (!res.ok) {
       console.warn(`  skip ${repoName}: contributors ${res.status}`);
-      return { added: 0, deleted: 0 };
+      return { added: 0, deleted: 0, commits: 0 };
     }
     const data = await res.json();
-    if (!Array.isArray(data)) return { added: 0, deleted: 0 };
+    if (!Array.isArray(data)) return { added: 0, deleted: 0, commits: 0 };
     const row = data.find(
       (c) => c.author?.login && c.author.login.toLowerCase() === login.toLowerCase(),
     );
-    if (!row?.weeks) return { added: 0, deleted: 0 };
+    if (!row?.weeks) return { added: 0, deleted: 0, commits: 0 };
     let added = 0;
     let deleted = 0;
+    let commits = 0;
     for (const w of row.weeks) {
       added += w.a || 0;
       deleted += w.d || 0;
+      commits += w.c || 0;
     }
-    return { added, deleted };
+    return { added, deleted, commits };
   }
-  return { added: 0, deleted: 0 };
+  return { added: 0, deleted: 0, commits: 0 };
+}
+
+/** Commits across GitHub visible to the token (incl. repos you don't own), not full git history. */
+async function searchCommitsTotal(login) {
+  const q = `author:${login}`;
+  const url = new URL('https://api.github.com/search/commits');
+  url.searchParams.set('q', q);
+  url.searchParams.set('per_page', '1');
+  const res = await ghFetch(url.toString());
+  if (!res.ok) {
+    const t = await res.text();
+    console.warn(`  commit search failed ${res.status}: ${t.slice(0, 200)}`);
+    return null;
+  }
+  const data = await res.json();
+  if (typeof data.total_count !== 'number') return null;
+  return data.total_count;
 }
 
 async function main() {
@@ -108,18 +149,21 @@ async function main() {
   const outPath = resolve(root, 'readme.source.build.md');
 
   let content = readFileSync(srcPath, 'utf8');
-  const markerRe = /\/\/ @@profile-line-stats[\s\S]*?\/\/ @@end-profile-line-stats/;
+  const markerRe = /\/\/ @@profile-github-stats[\s\S]*?\/\/ @@end-profile-github-stats/;
   if (!markerRe.test(content)) {
-    throw new Error('readme.source.md: missing @@profile-line-stats block');
+    throw new Error('readme.source.md: missing @@profile-github-stats block');
   }
 
   let added = null;
   let deleted = null;
+  let totalRepos = null;
+  let totalStars = null;
+  let totalCommits = null;
 
   if (!owner) {
-    console.warn('No PROFILE_OWNER / GITHUB_REPOSITORY_OWNER; line stats left null');
+    console.warn('No PROFILE_OWNER / GITHUB_REPOSITORY_OWNER; profile aggregates left null');
   } else if (!token) {
-    console.warn('No token; line stats left null (local preview)');
+    console.warn('No token; profile aggregates left null (local preview)');
   } else {
     try {
       const usePat = Boolean(pat);
@@ -129,29 +173,50 @@ async function main() {
           : `Listing public owner repos for ${owner} (add PROFILE_LINE_STATS_TOKEN for private too)…`,
       );
       const repos = usePat ? await listReposPat(owner) : await listReposPublic(owner);
-      console.log(`Found ${repos.length} repos. Fetching contributor stats (slow)…`);
+      totalRepos = repos.length;
+      totalStars = repos.reduce((s, r) => s + r.stars, 0);
+      console.log(
+        `${totalRepos} repos, ${totalStars} total stars on those repos. Fetching per-repo contributor stats…`,
+      );
       let ta = 0;
       let td = 0;
+      let tc = 0;
       for (let i = 0; i < repos.length; i++) {
         const r = repos[i];
-        const { added: a, deleted: d } = await contributorAddsDels(r.owner, r.name, owner);
-        ta += a;
-        td += d;
+        const st = await contributorStats(r.owner, r.name, owner);
+        ta += st.added;
+        td += st.deleted;
+        tc += st.commits;
         if ((i + 1) % 10 === 0) console.log(`  …${i + 1}/${repos.length}`);
         await sleep(120);
       }
       added = ta;
       deleted = td;
-      console.log(`Totals: +${added} / -${deleted} lines (GitHub default-branch contributor stats)`);
+      let searchCommits = null;
+      try {
+        searchCommits = await searchCommitsTotal(owner);
+        if (searchCommits != null) {
+          console.log(`  Search commits author:${owner} → total_count=${searchCommits}`);
+        }
+      } catch (e) {
+        console.warn('  commit search error:', e.message);
+      }
+      totalCommits = Math.max(tc, searchCommits ?? 0);
+      console.log(
+        `Totals: ${totalCommits} commits (max of contributor-sum on owned repos=${tc}, search=${searchCommits ?? 'n/a'}), +${added} / -${deleted} lines`,
+      );
     } catch (e) {
-      console.warn('Line stats failed:', e.message);
+      console.warn('Profile stats failed:', e.message);
     }
   }
 
-  const block = `// @@profile-line-stats
+  const block = `// @@profile-github-stats
   var profileLinesAdded = ${added === null ? 'null' : added};
   var profileLinesDeleted = ${deleted === null ? 'null' : deleted};
-  // @@end-profile-line-stats`;
+  var profileTotalRepos = ${totalRepos === null ? 'null' : totalRepos};
+  var profileTotalStars = ${totalStars === null ? 'null' : totalStars};
+  var profileTotalCommits = ${totalCommits === null ? 'null' : totalCommits};
+  // @@end-profile-github-stats`;
 
   content = content.replace(markerRe, block);
   writeFileSync(outPath, content, 'utf8');

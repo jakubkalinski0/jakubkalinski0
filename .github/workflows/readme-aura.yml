@@ -6,6 +6,7 @@ on:
     paths:
       - readme.source.md
       - scripts/inject-profile-line-stats.mjs
+      - scripts/ensure-readme-font.mjs
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
@@ -23,7 +24,10 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Inject profile line stats (adds/deletes)
+      - name: Ensure NotoSans (Latin Extended / Polish in SVG)
+        run: node scripts/ensure-readme-font.mjs
+
+      - name: Inject profile GitHub stats
         env:
           PROFILE_OWNER: ${{ github.repository_owner }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -35,3 +39,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           source: readme.source.build.md
+          fonts_dir: .github/fonts

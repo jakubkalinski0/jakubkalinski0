@@ -1,9 +1,11 @@
 <img alt="Profile views" src="https://komarev.com/ghpvc/?username=jakubkalinski0&amp;color=brightgreen&amp;style=flat-square&amp;abbreviated=true" />
 
+<!-- Tekst pod nazwą: pole Bio z profilu GitHub (Settings → Public profile). Czcionka NotoSans + .github/fonts (workflow) żeby działały polskie znaki w SVG. -->
+
 ```aura width=860 height=200
   <div style={{
   width: '100%', height: '100%', background: '#08080c',
-  display: 'flex', alignItems: 'center', fontFamily: 'Inter',
+  display: 'flex', alignItems: 'center', fontFamily: 'NotoSans',
   position: 'relative', overflow: 'hidden', borderRadius: 16,
   border: '1px solid rgba(110,80,220,0.18)'
 }}>
@@ -140,22 +142,28 @@
       g.stats.totalCommits === 1547
     );
   }
-  function fmtInt(n) {
-    if (n == null) return 'Mock';
-    var s = String(n);
-    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  }
   var useMock = isReadmeAuraMock(github);
-  // @@profile-line-stats
+  // @@profile-github-stats (CI injects full-profile aggregates; null = fall back to readme-aura / Mock)
   var profileLinesAdded = null;
   var profileLinesDeleted = null;
-  // @@end-profile-line-stats
-  var addedStr = useMock ? 'Mock' : fmtInt(profileLinesAdded);
-  var deletedStr = useMock ? 'Mock' : fmtInt(profileLinesDeleted);
+  var profileTotalRepos = null;
+  var profileTotalStars = null;
+  var profileTotalCommits = null;
+  // @@end-profile-github-stats
+  function fmtNum(n) {
+    if (n == null || n !== n) return 'Mock';
+    var s = String(Number(n));
+    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  var reposStr = useMock ? 'Mock' : (profileTotalRepos != null ? fmtNum(profileTotalRepos) : fmtNum(github.stats.totalRepos));
+  var starsStr = useMock ? 'Mock' : (profileTotalStars != null ? fmtNum(profileTotalStars) : fmtNum(github.stats.totalStars));
+  var commitsStr = useMock ? 'Mock' : (profileTotalCommits != null ? fmtNum(profileTotalCommits) : fmtNum(github.stats.totalCommits));
+  var addedStr = useMock ? 'Mock' : fmtNum(profileLinesAdded);
+  var deletedStr = useMock ? 'Mock' : fmtNum(profileLinesDeleted);
   var stats = [
-    { label: 'Repos', value: useMock ? 'Mock' : String(github.stats.totalRepos), color: '#a78bfa' },
-    { label: 'Stars', value: useMock ? 'Mock' : String(github.stats.totalStars), color: '#60a5fa' },
-    { label: 'Commits', value: useMock ? 'Mock' : String(github.stats.totalCommits), color: '#f59e0b' },
+    { label: 'Repos', value: reposStr, color: '#a78bfa' },
+    { label: 'Stars', value: starsStr, color: '#60a5fa' },
+    { label: 'Commits', value: commitsStr, color: '#f59e0b' },
     { label: 'Lines +', value: addedStr, color: '#4ade80' },
     { label: 'Lines -', value: deletedStr, color: '#fb7185' },
   ];
@@ -165,7 +173,7 @@
       width: '100%', height: '100%',
       background: '#08080c',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'Inter', borderRadius: 16,
+      fontFamily: 'NotoSans', borderRadius: 16,
       border: '1px solid rgba(110,80,220,0.18)',
       position: 'relative', overflow: 'hidden',
     }}>
@@ -288,7 +296,7 @@
       width: '100%', height: '100%',
       background: '#08080c',
       display: 'flex', flexDirection: 'column',
-      fontFamily: 'Inter', padding: '16px 28px', gap: 12,
+      fontFamily: 'NotoSans', padding: '16px 28px', gap: 12,
       borderRadius: 16, border: '1px solid rgba(110,80,220,0.18)',
       position: 'relative', overflow: 'hidden',
     }}>
@@ -404,4 +412,4 @@
 </picture>
 
 <br>
-<p align="center"><sub>Lines +/−: sum of your additions/deletions from <a href="https://docs.github.com/en/rest/metrics/statistics?apiVersion=2022-11-28#get-all-contributor-commit-activity">contributor stats</a> (default branch) across repos. Public repos only unless you add repo secret <code>PROFILE_LINE_STATS_TOKEN</code> (PAT with <code>repo</code> read). · powered by <a href="https://github.com/collectioneur/readme-aura">readme-aura</a></sub></p>
+<p align="center"><sub><strong>Repos / Stars</strong> (CI): repos you <em>own</em> (paginated). <strong>Lines ±</strong>: <a href="https://docs.github.com/en/rest/metrics/statistics?apiVersion=2022-11-28#get-all-contributor-commit-activity">contributor stats</a> on those repos only (default branch). <strong>Commits</strong>: max( sum of your weekly commit counts there , <a href="https://docs.github.com/en/rest/search/search#search-commits"><code>search/commits?q=author:…</code></a> <code>total_count</code> ) so work on org/other people’s repos can count too — still not “every git commit ever” (private visibility, e-mail ↔ GitHub account, API limits). PAT <code>PROFILE_LINE_STATS_TOKEN</code> for private owned repos. · powered by <a href="https://github.com/collectioneur/readme-aura">readme-aura</a></sub></p>

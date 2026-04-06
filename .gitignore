@@ -1,1 +1,6 @@
 readme.source.build.md
+
+# Pobierane przed buildem (Noto Sans — polskie znaki w SVG); nie trzymaj w repo
+.github/fonts/*.ttf
+.github/fonts/*.woff
+.github/fonts/*.otf
