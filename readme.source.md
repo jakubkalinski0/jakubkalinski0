@@ -155,11 +155,17 @@
     var s = String(Number(n));
     return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
-  var reposStr = useMock ? 'Mock' : (profileTotalRepos != null ? fmtNum(profileTotalRepos) : fmtNum(github.stats.totalRepos));
-  var starsStr = useMock ? 'Mock' : (profileTotalStars != null ? fmtNum(profileTotalStars) : fmtNum(github.stats.totalStars));
-  var commitsStr = useMock ? 'Mock' : (profileTotalCommits != null ? fmtNum(profileTotalCommits) : fmtNum(github.stats.totalCommits));
-  var addedStr = useMock ? 'Mock' : fmtNum(profileLinesAdded);
-  var deletedStr = useMock ? 'Mock' : fmtNum(profileLinesDeleted);
+  // CI inject runs first: show injected numbers even if readme-aura fell back to internal mock (GraphQL failed).
+  var reposStr =
+    profileTotalRepos != null ? fmtNum(profileTotalRepos) : useMock ? 'Mock' : fmtNum(github.stats.totalRepos);
+  var starsStr =
+    profileTotalStars != null ? fmtNum(profileTotalStars) : useMock ? 'Mock' : fmtNum(github.stats.totalStars);
+  var commitsStr =
+    profileTotalCommits != null ? fmtNum(profileTotalCommits) : useMock ? 'Mock' : fmtNum(github.stats.totalCommits);
+  var addedStr =
+    profileLinesAdded != null ? fmtNum(profileLinesAdded) : useMock ? 'Mock' : fmtNum(null);
+  var deletedStr =
+    profileLinesDeleted != null ? fmtNum(profileLinesDeleted) : useMock ? 'Mock' : fmtNum(null);
   var stats = [
     { label: 'Repos', value: reposStr, color: '#a78bfa' },
     { label: 'Stars', value: starsStr, color: '#60a5fa' },
