@@ -3,8 +3,10 @@
  *
  * Repos / Stars: all repositories you *own* (paginated). PAT = private too; else public owned only.
  *
- * Lines +/−: per-repo GET stats/contributors (your row, default branch, weekly buckets) — owned repos
- * only. Same source as line counts.
+ * Lines +/−: repos from GraphQL user.repositoriesContributedTo (COMMIT only, paginated, deduped),
+ *   then per-repo GET stats/contributors (your row, default branch, weekly a/d). Includes org/collab
+ *   repos, not just owned. Falls back to owned-only list if that query fails. Private repos need PAT
+ *   with repo scope for both listing and /stats/contributors.
  *
  * Contributions (card): For each calendar year (UTC Jan 1 → next Jan 1), GraphQL
  *   contributionCalendar.totalContributions + restrictedContributionsCount, then sum years
@@ -189,6 +191,51 @@ async function sumContributionsByCalendarYear(login) {
   return sum;
 }
 
+const REPOS_COMMITS_CONTRIBUTED_QUERY = `
+query($login: String!, $first: Int!, $after: String) {
+  user(login: $login) {
+    repositoriesContributedTo(
+      first: $first
+      after: $after
+      includeUserRepositories: true
+      contributionTypes: [COMMIT]
+    ) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        owner { login }
+        name
+      }
+    }
+  }
+}
+`;
+
+/** Unique owner/name where the user has commit contributions (not only repos they own). */
+async function listReposWithCommitContributions(login) {
+  const seen = new Set();
+  const out = [];
+  const first = 100;
+  let after = null;
+  for (;;) {
+    const data = await graphqlGitHub(REPOS_COMMITS_CONTRIBUTED_QUERY, { login, first, after });
+    const conn = data?.user?.repositoriesContributedTo;
+    if (!conn?.nodes) break;
+    for (const node of conn.nodes) {
+      const o = node?.owner?.login;
+      const n = node?.name;
+      if (!o || !n) continue;
+      const key = `${o.toLowerCase()}/${n.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ owner: o, name: n });
+    }
+    if (!conn.pageInfo?.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+    await sleep(150);
+  }
+  return out;
+}
+
 async function main() {
   const root = process.cwd();
   const srcPath = resolve(root, 'readme.source.md');
@@ -218,20 +265,30 @@ async function main() {
           ? `Listing owned repos via PAT (public + private) for ${owner}…`
           : `Listing public owner repos for ${owner} (add PROFILE_LINE_STATS_TOKEN for private too)…`,
       );
-      const repos = usePat ? await listReposPat(owner) : await listReposPublic(owner);
-      totalRepos = repos.length;
-      totalStars = repos.reduce((s, r) => s + r.stars, 0);
-      console.log(
-        `${totalRepos} repos, ${totalStars} total stars on those repos. Fetching per-repo contributor stats…`,
-      );
+      const reposOwned = usePat ? await listReposPat(owner) : await listReposPublic(owner);
+      totalRepos = reposOwned.length;
+      totalStars = reposOwned.reduce((s, r) => s + r.stars, 0);
+      console.log(`${totalRepos} owned repos, ${totalStars} total stars on those.`);
+
+      let reposForLines;
+      try {
+        reposForLines = await listReposWithCommitContributions(owner);
+        console.log(
+          `${reposForLines.length} repos with your commits (for Lines ±); fetching stats/contributors each…`,
+        );
+      } catch (e) {
+        console.warn('repositoriesContributedTo failed, using owned repos only for lines:', e.message);
+        reposForLines = reposOwned.map((r) => ({ owner: r.owner, name: r.name }));
+      }
+
       let ta = 0;
       let td = 0;
-      for (let i = 0; i < repos.length; i++) {
-        const r = repos[i];
+      for (let i = 0; i < reposForLines.length; i++) {
+        const r = reposForLines[i];
         const st = await contributorStats(r.owner, r.name, owner);
         ta += st.added;
         td += st.deleted;
-        if ((i + 1) % 10 === 0) console.log(`  …${i + 1}/${repos.length}`);
+        if ((i + 1) % 10 === 0) console.log(`  …lines ${i + 1}/${reposForLines.length}`);
         await sleep(120);
       }
       added = ta;
