@@ -6,11 +6,11 @@
  * Lines +/−: per-repo GET stats/contributors (your row, default branch, weekly buckets) — owned repos
  * only. Same source as line counts.
  *
- * Contributions (card): GraphQL contributionsCollection from user createdAt → now:
- *   contributionCalendar.totalContributions + restrictedContributionsCount.
- * The latter counts private activity the viewer cannot see in the calendar but that still shows on your
- * profile when "private contributions" is enabled — GITHUB_TOKEN (Actions bot) often misses those without
- * a user PAT. Use PROFILE_LINE_STATS_TOKEN with read:user for full parity with what you see logged in.
+ * Contributions (card): For each calendar year (UTC Jan 1 → next Jan 1), GraphQL
+ *   contributionCalendar.totalContributions + restrictedContributionsCount, then sum years
+ *   from account-creation year through current UTC year.
+ * Do not use one multi-year contributionsCollection — totalContributions is wrong for long spans (~partial year).
+ * restricted* = private aggregate hidden from the viewer; GITHUB_TOKEN often needs PAT + read:user for parity.
  *
  * PAT PROFILE_LINE_STATS_TOKEN: /user/repos?affiliation=owner.
  * Else: /users/{login}/repos?type=owner + GITHUB_TOKEN.
@@ -144,22 +144,19 @@ async function graphqlGitHub(query, variables) {
   return body.data;
 }
 
-async function userCreatedAtIso(login) {
+async function userCreatedYear(login) {
   const data = await graphqlGitHub(
     `query($login: String!) { user(login: $login) { createdAt } }`,
     { login },
   );
   if (!data?.user?.createdAt) throw new Error('GraphQL: user not found');
-  return data.user.createdAt;
+  return new Date(data.user.createdAt).getUTCFullYear();
 }
 
-/**
- * Lifetime total matching the profile graph: calendar squares + contributions hidden from this viewer
- * (private repos when user enabled aggregate private counts on profile).
- */
-async function totalContributionsLifetime(login) {
-  const from = await userCreatedAtIso(login);
-  const to = new Date().toISOString();
+/** One calendar year (UTC), same window as the profile year tab; includes restricted for this viewer. */
+async function contributionTotalsForYear(login, year) {
+  const from = `${year}-01-01T00:00:00Z`;
+  const to = `${year + 1}-01-01T00:00:00Z`;
   const data = await graphqlGitHub(
     `query($login: String!, $from: DateTime!, $to: DateTime!) {
       user(login: $login) {
@@ -174,13 +171,22 @@ async function totalContributionsLifetime(login) {
   const coll = data?.user?.contributionsCollection;
   const cal = coll?.contributionCalendar?.totalContributions;
   const restricted = coll?.restrictedContributionsCount ?? 0;
-  if (typeof cal !== 'number') throw new Error('GraphQL: no contributionCalendar.totalContributions');
+  if (typeof cal !== 'number') throw new Error(`GraphQL: no totalContributions for ${year}`);
   const r = typeof restricted === 'number' ? restricted : 0;
-  const total = cal + r;
-  console.log(
-    `  contributions (createdAt→now): calendar=${cal} + restricted=${r} → ${total} (use PAT + read:user if restricted stays high vs logged-in view)`,
-  );
-  return total;
+  return { calendar: cal, restricted: r, total: cal + r };
+}
+
+async function sumContributionsByCalendarYear(login) {
+  const startYear = await userCreatedYear(login);
+  const endYear = new Date().getUTCFullYear();
+  let sum = 0;
+  for (let y = startYear; y <= endYear; y++) {
+    const { calendar, restricted, total } = await contributionTotalsForYear(login, y);
+    sum += total;
+    console.log(`  contributions ${y}: calendar=${calendar} + restricted=${restricted} → ${total} (sum=${sum})`);
+    await sleep(200);
+  }
+  return sum;
 }
 
 async function main() {
@@ -230,8 +236,8 @@ async function main() {
       }
       added = ta;
       deleted = td;
-      console.log('Fetching contribution graph total (GraphQL, lifetime window)…');
-      profileContributionsTotal = await totalContributionsLifetime(owner);
+      console.log('Fetching contribution graph totals (GraphQL, per UTC calendar year)…');
+      profileContributionsTotal = await sumContributionsByCalendarYear(owner);
       console.log(
         `Totals: ${profileContributionsTotal} contributions (sum of yearly graph totals), +${added} / -${deleted} lines`,
       );
