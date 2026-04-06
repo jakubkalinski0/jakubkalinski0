@@ -3,10 +3,10 @@
  *
  * Repos / Stars: all repositories you *own* (paginated). PAT = private too; else public owned only.
  *
- * Lines +/−: repos from GraphQL user.repositoriesContributedTo (COMMIT only, paginated, deduped),
- *   then per-repo GET stats/contributors (your row, default branch, weekly a/d). Includes org/collab
- *   repos, not just owned. Falls back to owned-only list if that query fails. Private repos need PAT
- *   with repo scope for both listing and /stats/contributors.
+ * Lines +/−: union of (1) GraphQL repositoriesContributedTo (COMMIT, paginated) and (2) owned repos
+ *   from REST. GitHub’s “contributed to” set can omit some of your own repos (ordering / heuristics),
+ *   so owned-only line totals would otherwise drop after switching away from owned-only. Deduped by
+ *   owner/name. Then GET stats/contributors per repo as before. PAT + repo for private.
  *
  * Contributions (card): For each calendar year (UTC Jan 1 → next Jan 1), GraphQL
  *   contributionCalendar.totalContributions + restrictedContributionsCount, then sum years
@@ -236,6 +236,25 @@ async function listReposWithCommitContributions(login) {
   return out;
 }
 
+/** Contributed-to repos plus any owned repo not already listed (restores full owned coverage). */
+function mergeReposForLineStats(contributed, owned) {
+  const seen = new Set();
+  const out = [];
+  for (const r of contributed) {
+    const key = `${r.owner.toLowerCase()}/${r.name.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ owner: r.owner, name: r.name });
+  }
+  for (const r of owned) {
+    const key = `${r.owner.toLowerCase()}/${r.name.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ owner: r.owner, name: r.name });
+  }
+  return out;
+}
+
 async function main() {
   const root = process.cwd();
   const srcPath = resolve(root, 'readme.source.md');
@@ -270,16 +289,20 @@ async function main() {
       totalStars = reposOwned.reduce((s, r) => s + r.stars, 0);
       console.log(`${totalRepos} owned repos, ${totalStars} total stars on those.`);
 
-      let reposForLines;
+      let contributedRepos = [];
       try {
-        reposForLines = await listReposWithCommitContributions(owner);
-        console.log(
-          `${reposForLines.length} repos with your commits (for Lines ±); fetching stats/contributors each…`,
-        );
+        contributedRepos = await listReposWithCommitContributions(owner);
+        console.log(`${contributedRepos.length} repos from repositoriesContributedTo (COMMIT).`);
       } catch (e) {
-        console.warn('repositoriesContributedTo failed, using owned repos only for lines:', e.message);
-        reposForLines = reposOwned.map((r) => ({ owner: r.owner, name: r.name }));
+        console.warn('repositoriesContributedTo failed (owned repos still included for lines):', e.message);
       }
+      const reposForLines = mergeReposForLineStats(
+        contributedRepos,
+        reposOwned.map((r) => ({ owner: r.owner, name: r.name })),
+      );
+      console.log(
+        `${reposForLines.length} unique repos for Lines ± (owned ∪ contributed); fetching stats/contributors…`,
+      );
 
       let ta = 0;
       let td = 0;
