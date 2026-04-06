@@ -3,12 +3,12 @@
  *
  * Repos / Stars: all repositories you *own* (paginated). PAT = private too; else public owned only.
  *
- * Lines +/− and "contributor" commit sum: per-repo GET stats/contributors (your row, default branch,
- * weekly buckets) — only for repos we iterate (owned list). Same source as line counts.
+ * Lines +/−: per-repo GET stats/contributors (your row, default branch, weekly buckets) — owned repos
+ * only. Same source as line counts.
  *
- * Commits (card): max( sum of those weekly "c" , Search API total_count for author:LOGIN ).
- *   Search includes commits on repos you do *not* own (orgs, forks you contributed to), within
- *   GitHub's index and visibility rules. Not a raw `git rev-list --all` — GitHub does not expose that.
+ * Contributions (card): sum over calendar years of GraphQL contributionsCollection →
+ * contributionCalendar.totalContributions (same annual totals as the profile contribution graph tabs).
+ * That is GitHub's "contributions" (qualifying commits, PRs, issues, etc.), not a raw git commit count.
  *
  * PAT PROFILE_LINE_STATS_TOKEN: /user/repos?affiliation=owner.
  * Else: /users/{login}/repos?type=owner + GITHUB_TOKEN.
@@ -102,45 +102,87 @@ async function contributorStats(repoOwner, repoName, login) {
       await sleep(800 + attempt * 400);
       continue;
     }
-    if (res.status === 404) return { added: 0, deleted: 0, commits: 0 };
+    if (res.status === 404) return { added: 0, deleted: 0 };
     if (!res.ok) {
       console.warn(`  skip ${repoName}: contributors ${res.status}`);
-      return { added: 0, deleted: 0, commits: 0 };
+      return { added: 0, deleted: 0 };
     }
     const data = await res.json();
-    if (!Array.isArray(data)) return { added: 0, deleted: 0, commits: 0 };
+    if (!Array.isArray(data)) return { added: 0, deleted: 0 };
     const row = data.find(
       (c) => c.author?.login && c.author.login.toLowerCase() === login.toLowerCase(),
     );
-    if (!row?.weeks) return { added: 0, deleted: 0, commits: 0 };
+    if (!row?.weeks) return { added: 0, deleted: 0 };
     let added = 0;
     let deleted = 0;
-    let commits = 0;
     for (const w of row.weeks) {
       added += w.a || 0;
       deleted += w.d || 0;
-      commits += w.c || 0;
     }
-    return { added, deleted, commits };
+    return { added, deleted };
   }
-  return { added: 0, deleted: 0, commits: 0 };
+  return { added: 0, deleted: 0 };
 }
 
-/** Commits across GitHub visible to the token (incl. repos you don't own), not full git history. */
-async function searchCommitsTotal(login) {
-  const q = `author:${login}`;
-  const url = new URL('https://api.github.com/search/commits');
-  url.searchParams.set('q', q);
-  url.searchParams.set('per_page', '1');
-  const res = await ghFetch(url.toString());
-  if (!res.ok) {
-    const t = await res.text();
-    console.warn(`  commit search failed ${res.status}: ${t.slice(0, 200)}`);
-    return null;
+async function graphqlGitHub(query, variables) {
+  const res = await fetch('https://api.github.com/graphql', {
+    method: 'POST',
+    headers: {
+      ...HEADERS_BASE,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!res.ok) throw new Error(`GraphQL HTTP ${res.status} ${await res.text()}`);
+  const body = await res.json();
+  if (body.errors?.length) {
+    throw new Error(body.errors.map((e) => e.message).join('; '));
   }
-  const data = await res.json();
-  if (typeof data.total_count !== 'number') return null;
-  return data.total_count;
+  return body.data;
+}
+
+/** First calendar year that can appear on the contribution graph (UTC). */
+async function userCreatedYear(login) {
+  const data = await graphqlGitHub(
+    `query($login: String!) { user(login: $login) { createdAt } }`,
+    { login },
+  );
+  if (!data?.user?.createdAt) throw new Error('GraphQL: user not found');
+  return new Date(data.user.createdAt).getUTCFullYear();
+}
+
+/** Same annual total as the profile "contributions in YYYY" for that calendar year (UTC window). */
+async function contributionCalendarYearTotal(login, year) {
+  const from = `${year}-01-01T00:00:00Z`;
+  const to = `${year + 1}-01-01T00:00:00Z`;
+  const data = await graphqlGitHub(
+    `query($login: String!, $from: DateTime!, $to: DateTime!) {
+      user(login: $login) {
+        contributionsCollection(from: $from, to: $to) {
+          contributionCalendar { totalContributions }
+        }
+      }
+    }`,
+    { login, from, to },
+  );
+  const n = data?.user?.contributionsCollection?.contributionCalendar?.totalContributions;
+  if (typeof n !== 'number') throw new Error(`GraphQL: no totalContributions for ${year}`);
+  return n;
+}
+
+/** Sum of profile graph yearly totals from signup year through current UTC year. */
+async function sumProfileContributionCalendar(login) {
+  const startYear = await userCreatedYear(login);
+  const endYear = new Date().getUTCFullYear();
+  let sum = 0;
+  for (let y = startYear; y <= endYear; y++) {
+    const n = await contributionCalendarYearTotal(login, y);
+    sum += n;
+    console.log(`  contribution graph ${y}: ${n}`);
+    await sleep(200);
+  }
+  return sum;
 }
 
 async function main() {
@@ -158,7 +200,7 @@ async function main() {
   let deleted = null;
   let totalRepos = null;
   let totalStars = null;
-  let totalCommits = null;
+  let profileContributionsTotal = null;
 
   if (!owner) {
     console.warn('No PROFILE_OWNER / GITHUB_REPOSITORY_OWNER; profile aggregates left null');
@@ -180,30 +222,20 @@ async function main() {
       );
       let ta = 0;
       let td = 0;
-      let tc = 0;
       for (let i = 0; i < repos.length; i++) {
         const r = repos[i];
         const st = await contributorStats(r.owner, r.name, owner);
         ta += st.added;
         td += st.deleted;
-        tc += st.commits;
         if ((i + 1) % 10 === 0) console.log(`  …${i + 1}/${repos.length}`);
         await sleep(120);
       }
       added = ta;
       deleted = td;
-      let searchCommits = null;
-      try {
-        searchCommits = await searchCommitsTotal(owner);
-        if (searchCommits != null) {
-          console.log(`  Search commits author:${owner} → total_count=${searchCommits}`);
-        }
-      } catch (e) {
-        console.warn('  commit search error:', e.message);
-      }
-      totalCommits = Math.max(tc, searchCommits ?? 0);
+      console.log('Fetching contribution graph totals (GraphQL, per calendar year)…');
+      profileContributionsTotal = await sumProfileContributionCalendar(owner);
       console.log(
-        `Totals: ${totalCommits} commits (max of contributor-sum on owned repos=${tc}, search=${searchCommits ?? 'n/a'}), +${added} / -${deleted} lines`,
+        `Totals: ${profileContributionsTotal} contributions (sum of yearly graph totals), +${added} / -${deleted} lines`,
       );
     } catch (e) {
       console.warn('Profile stats failed:', e.message);
@@ -215,7 +247,7 @@ async function main() {
   var profileLinesDeleted = ${deleted === null ? 'null' : deleted};
   var profileTotalRepos = ${totalRepos === null ? 'null' : totalRepos};
   var profileTotalStars = ${totalStars === null ? 'null' : totalStars};
-  var profileTotalCommits = ${totalCommits === null ? 'null' : totalCommits};
+  var profileContributionsTotal = ${profileContributionsTotal === null ? 'null' : profileContributionsTotal};
   // @@end-profile-github-stats`;
 
   content = content.replace(markerRe, block);

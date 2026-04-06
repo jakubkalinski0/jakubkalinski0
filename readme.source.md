@@ -148,7 +148,7 @@
   var profileLinesDeleted = null;
   var profileTotalRepos = null;
   var profileTotalStars = null;
-  var profileTotalCommits = null;
+  var profileContributionsTotal = null;
   // @@end-profile-github-stats
   function fmtNum(n) {
     if (n == null || n !== n) return 'Mock';
@@ -160,8 +160,12 @@
     profileTotalRepos != null ? fmtNum(profileTotalRepos) : useMock ? 'Mock' : fmtNum(github.stats.totalRepos);
   var starsStr =
     profileTotalStars != null ? fmtNum(profileTotalStars) : useMock ? 'Mock' : fmtNum(github.stats.totalStars);
-  var commitsStr =
-    profileTotalCommits != null ? fmtNum(profileTotalCommits) : useMock ? 'Mock' : fmtNum(github.stats.totalCommits);
+  var contributionsStr =
+    profileContributionsTotal != null
+      ? fmtNum(profileContributionsTotal)
+      : useMock
+        ? 'Mock'
+        : fmtNum(github.stats.totalCommits);
   var addedStr =
     profileLinesAdded != null ? fmtNum(profileLinesAdded) : useMock ? 'Mock' : fmtNum(null);
   var deletedStr =
@@ -169,7 +173,7 @@
   var stats = [
     { label: 'Repos', value: reposStr, color: '#a78bfa' },
     { label: 'Stars', value: starsStr, color: '#60a5fa' },
-    { label: 'Commits', value: commitsStr, color: '#f59e0b' },
+    { label: 'Contributions', value: contributionsStr, color: '#f59e0b' },
     { label: 'Lines +', value: addedStr, color: '#4ade80' },
     { label: 'Lines -', value: deletedStr, color: '#fb7185' },
   ];
