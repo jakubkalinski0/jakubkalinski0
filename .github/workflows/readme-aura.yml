@@ -1,0 +1,37 @@
+name: Generate README
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - readme.source.md
+      - scripts/inject-profile-line-stats.mjs
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Inject profile line stats (adds/deletes)
+        env:
+          PROFILE_OWNER: ${{ github.repository_owner }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROFILE_LINE_STATS_TOKEN: ${{ secrets.PROFILE_LINE_STATS_TOKEN }}
+        run: node scripts/inject-profile-line-stats.mjs
+
+      - name: Generate README from readme-aura
+        uses: collectioneur/readme-aura@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          source: readme.source.build.md
