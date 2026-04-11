@@ -31,7 +31,7 @@ jobs:
         env:
           PROFILE_OWNER: ${{ github.repository_owner }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # For full per-commit line coverage (private/org/collab repos), set a PAT with repo + read:user.
+          # PAT improves private owned repo coverage and contribution-graph parity.
           PROFILE_LINE_STATS_TOKEN: ${{ secrets.PROFILE_LINE_STATS_TOKEN }}
         run: node scripts/inject-profile-line-stats.mjs
 

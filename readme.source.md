@@ -144,8 +144,6 @@
   }
   var useMock = isReadmeAuraMock(github);
   // @@profile-github-stats (CI injects full-profile aggregates; null = fall back to readme-aura / Mock)
-  var profileLinesAdded = null;
-  var profileLinesDeleted = null;
   var profileTotalRepos = null;
   var profileTotalStars = null;
   var profileContributionsTotal = null;
@@ -166,16 +164,10 @@
       : useMock
         ? 'Mock'
         : fmtNum(github.stats.totalCommits);
-  var addedStr =
-    profileLinesAdded != null ? fmtNum(profileLinesAdded) : useMock ? 'Mock' : fmtNum(null);
-  var deletedStr =
-    profileLinesDeleted != null ? fmtNum(profileLinesDeleted) : useMock ? 'Mock' : fmtNum(null);
   var stats = [
     { label: 'Repos', value: reposStr, color: '#a78bfa' },
     { label: 'Stars', value: starsStr, color: '#60a5fa' },
     { label: 'Contributions', value: contributionsStr, color: '#f59e0b' },
-    { label: 'Lines +', value: addedStr, color: '#4ade80' },
-    { label: 'Lines -', value: deletedStr, color: '#fb7185' },
   ];
 
   return (
