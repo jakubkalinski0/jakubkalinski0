@@ -3,10 +3,10 @@
  *
  * Repos / Stars: all repositories you *own* (paginated). PAT = private too; else public owned only.
  *
- * Lines +/−: union of (1) GraphQL repositoriesContributedTo (COMMIT, paginated) and (2) owned repos
- *   from REST. GitHub’s “contributed to” set can omit some of your own repos (ordering / heuristics),
- *   so owned-only line totals would otherwise drop after switching away from owned-only. Deduped by
- *   owner/name. Then GET stats/contributors per repo as before. PAT + repo for private.
+ * Lines +/−: per-commit all-time sum across repositories visible to the token. We enumerate a deduped
+ * repo set from REST + GraphQL, then list commits authored by the target user and sum commit stats
+ * (additions/deletions). This avoids rolling-window drift from stats/contributors. PAT + repo is
+ * effectively required for good private/org coverage.
  *
  * Contributions (card): For each calendar year (UTC Jan 1 → next Jan 1), GraphQL
  *   contributionCalendar.totalContributions + restrictedContributionsCount, then sum years
@@ -30,6 +30,11 @@ const HEADERS_BASE = {
   'X-GitHub-Api-Version': '2022-11-28',
   'User-Agent': 'jakubkalinski0-profile-stats-inject',
 };
+const REQUEST_TIMEOUT_MS = 20_000;
+const REPO_LIST_PAGE_LIMIT = 50;
+const COMMIT_LIST_PAGE_LIMIT = 200;
+const COMMITS_PER_PAGE = 100;
+const API_PAUSE_MS = 120;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -38,7 +43,8 @@ function sleep(ms) {
 async function ghFetch(url, opts = {}) {
   const headers = { ...HEADERS_BASE, ...opts.headers };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(url, { ...opts, headers });
+  const signal = opts.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const res = await fetch(url, { ...opts, headers, signal });
   return res;
 }
 
@@ -54,7 +60,7 @@ function repoRow(r, login) {
 
 async function listReposPat(login) {
   const repos = [];
-  for (let page = 1; page <= 50; page++) {
+  for (let page = 1; page <= REPO_LIST_PAGE_LIMIT; page++) {
     const u = new URL('https://api.github.com/user/repos');
     u.searchParams.set('per_page', '100');
     u.searchParams.set('page', String(page));
@@ -75,7 +81,7 @@ async function listReposPat(login) {
 
 async function listReposPublic(login) {
   const repos = [];
-  for (let page = 1; page <= 50; page++) {
+  for (let page = 1; page <= REPO_LIST_PAGE_LIMIT; page++) {
     const u = new URL(`https://api.github.com/users/${encodeURIComponent(login)}/repos`);
     u.searchParams.set('per_page', '100');
     u.searchParams.set('page', String(page));
@@ -96,36 +102,6 @@ async function listReposPublic(login) {
     if (batch.length < 100) break;
   }
   return repos;
-}
-
-async function contributorStats(repoOwner, repoName, login) {
-  const url = `https://api.github.com/repos/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}/stats/contributors`;
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const res = await ghFetch(url);
-    if (res.status === 202) {
-      await sleep(800 + attempt * 400);
-      continue;
-    }
-    if (res.status === 404) return { added: 0, deleted: 0 };
-    if (!res.ok) {
-      console.warn(`  skip ${repoName}: contributors ${res.status}`);
-      return { added: 0, deleted: 0 };
-    }
-    const data = await res.json();
-    if (!Array.isArray(data)) return { added: 0, deleted: 0 };
-    const row = data.find(
-      (c) => c.author?.login && c.author.login.toLowerCase() === login.toLowerCase(),
-    );
-    if (!row?.weeks) return { added: 0, deleted: 0 };
-    let added = 0;
-    let deleted = 0;
-    for (const w of row.weeks) {
-      added += w.a || 0;
-      deleted += w.d || 0;
-    }
-    return { added, deleted };
-  }
-  return { added: 0, deleted: 0 };
 }
 
 async function graphqlGitHub(query, variables) {
@@ -191,6 +167,10 @@ async function sumContributionsByCalendarYear(login) {
   return sum;
 }
 
+function repoKey(r) {
+  return `${r.owner.toLowerCase()}/${r.name.toLowerCase()}`;
+}
+
 const REPOS_COMMITS_CONTRIBUTED_QUERY = `
 query($login: String!, $first: Int!, $after: String) {
   user(login: $login) {
@@ -231,28 +211,106 @@ async function listReposWithCommitContributions(login) {
     }
     if (!conn.pageInfo?.hasNextPage) break;
     after = conn.pageInfo.endCursor;
-    await sleep(150);
+    await sleep(API_PAUSE_MS);
   }
   return out;
 }
 
-/** Contributed-to repos plus any owned repo not already listed (restores full owned coverage). */
-function mergeReposForLineStats(contributed, owned) {
+async function listAccessibleReposPat() {
+  const repos = [];
+  for (let page = 1; page <= REPO_LIST_PAGE_LIMIT; page++) {
+    const u = new URL('https://api.github.com/user/repos');
+    u.searchParams.set('per_page', String(COMMITS_PER_PAGE));
+    u.searchParams.set('page', String(page));
+    u.searchParams.set('visibility', 'all');
+    u.searchParams.set('affiliation', 'owner,collaborator,organization_member');
+    u.searchParams.set('sort', 'updated');
+    const res = await ghFetch(u.toString());
+    if (!res.ok) throw new Error(`user/repos(all accessible): ${res.status} ${await res.text()}`);
+    const batch = await res.json();
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    for (const r of batch) {
+      if (!r?.owner?.login || !r?.name) continue;
+      repos.push({ owner: r.owner.login, name: r.name, private: Boolean(r.private) });
+    }
+    if (batch.length < COMMITS_PER_PAGE) break;
+    await sleep(API_PAUSE_MS);
+  }
+  return repos;
+}
+
+function mergeReposForLineStats(...groups) {
   const seen = new Set();
   const out = [];
-  for (const r of contributed) {
-    const key = `${r.owner.toLowerCase()}/${r.name.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ owner: r.owner, name: r.name });
-  }
-  for (const r of owned) {
-    const key = `${r.owner.toLowerCase()}/${r.name.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ owner: r.owner, name: r.name });
+  for (const group of groups) {
+    for (const r of group) {
+      const key = repoKey(r);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ owner: r.owner, name: r.name });
+    }
   }
   return out;
+}
+
+function formatRepo(r) {
+  return `${r.owner}/${r.name}`;
+}
+
+async function fetchCommitDetailStats(repoOwner, repoName, ref) {
+  const url = `https://api.github.com/repos/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}/commits/${encodeURIComponent(ref)}`;
+  const res = await ghFetch(url);
+  if (res.status === 404) return { added: 0, deleted: 0 };
+  if (!res.ok) throw new Error(`commit detail ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return {
+    added: data?.stats?.additions ?? 0,
+    deleted: data?.stats?.deletions ?? 0,
+  };
+}
+
+async function sumRepoCommitStats(repoOwner, repoName, login) {
+  let added = 0;
+  let deleted = 0;
+  let commits = 0;
+  let truncated = false;
+
+  for (let page = 1; page <= COMMIT_LIST_PAGE_LIMIT; page++) {
+    const u = new URL(
+      `https://api.github.com/repos/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}/commits`,
+    );
+    u.searchParams.set('author', login);
+    u.searchParams.set('per_page', String(COMMITS_PER_PAGE));
+    u.searchParams.set('page', String(page));
+    const res = await ghFetch(u.toString());
+    if (res.status === 409 || res.status === 404) {
+      return { added: 0, deleted: 0, commits: 0, truncated: false, skipped: false };
+    }
+    if (!res.ok) {
+      throw new Error(`commit list ${res.status} ${await res.text()}`);
+    }
+    const batch = await res.json();
+    if (!Array.isArray(batch) || batch.length === 0) {
+      return { added, deleted, commits, truncated, skipped: false };
+    }
+    for (const item of batch) {
+      const stats =
+        item?.stats && typeof item.stats.additions === 'number' && typeof item.stats.deletions === 'number'
+          ? { added: item.stats.additions, deleted: item.stats.deletions }
+          : await fetchCommitDetailStats(repoOwner, repoName, item.sha);
+      added += stats.added;
+      deleted += stats.deleted;
+      commits += 1;
+      await sleep(API_PAUSE_MS);
+    }
+    if (batch.length < COMMITS_PER_PAGE) {
+      return { added, deleted, commits, truncated, skipped: false };
+    }
+    await sleep(API_PAUSE_MS);
+  }
+
+  truncated = true;
+  return { added, deleted, commits, truncated, skipped: false };
 }
 
 async function main() {
@@ -289,6 +347,18 @@ async function main() {
       totalStars = reposOwned.reduce((s, r) => s + r.stars, 0);
       console.log(`${totalRepos} owned repos, ${totalStars} total stars on those.`);
 
+      let accessibleRepos = [];
+      if (usePat) {
+        try {
+          accessibleRepos = await listAccessibleReposPat();
+          console.log(`${accessibleRepos.length} accessible repos from /user/repos.`);
+        } catch (e) {
+          console.warn('Accessible repo listing failed, falling back to owned + contributed only:', e.message);
+        }
+      } else {
+        console.warn('No PAT: line stats cover public/known repos only. Add PROFILE_LINE_STATS_TOKEN with repo + read:user for fuller coverage.');
+      }
+
       let contributedRepos = [];
       try {
         contributedRepos = await listReposWithCommitContributions(owner);
@@ -297,29 +367,43 @@ async function main() {
         console.warn('repositoriesContributedTo failed (owned repos still included for lines):', e.message);
       }
       const reposForLines = mergeReposForLineStats(
+        accessibleRepos,
         contributedRepos,
         reposOwned.map((r) => ({ owner: r.owner, name: r.name })),
       );
       console.log(
-        `${reposForLines.length} unique repos for Lines ± (owned ∪ contributed); fetching stats/contributors…`,
+        `${reposForLines.length} unique repos for Lines ± (accessible ∪ contributed ∪ owned); walking commits…`,
       );
 
       let ta = 0;
       let td = 0;
+      let totalCommitSamples = 0;
+      let truncatedRepos = 0;
+      let skippedRepos = 0;
       for (let i = 0; i < reposForLines.length; i++) {
         const r = reposForLines[i];
-        const st = await contributorStats(r.owner, r.name, owner);
-        ta += st.added;
-        td += st.deleted;
+        try {
+          const st = await sumRepoCommitStats(r.owner, r.name, owner);
+          ta += st.added;
+          td += st.deleted;
+          totalCommitSamples += st.commits;
+          if (st.truncated) {
+            truncatedRepos += 1;
+            console.warn(`  truncated ${formatRepo(r)} after ${COMMIT_LIST_PAGE_LIMIT} pages`);
+          }
+        } catch (e) {
+          skippedRepos += 1;
+          console.warn(`  skip ${formatRepo(r)}: ${e.message}`);
+        }
         if ((i + 1) % 10 === 0) console.log(`  …lines ${i + 1}/${reposForLines.length}`);
-        await sleep(120);
+        await sleep(API_PAUSE_MS);
       }
       added = ta;
       deleted = td;
       console.log('Fetching contribution graph totals (GraphQL, per UTC calendar year)…');
       profileContributionsTotal = await sumContributionsByCalendarYear(owner);
       console.log(
-        `Totals: ${profileContributionsTotal} contributions (sum of yearly graph totals), +${added} / -${deleted} lines`,
+        `Totals: ${profileContributionsTotal} contributions, +${added} / -${deleted} lines from ${totalCommitSamples} commits; skipped repos=${skippedRepos}, truncated repos=${truncatedRepos}`,
       );
     } catch (e) {
       console.warn('Profile stats failed:', e.message);
