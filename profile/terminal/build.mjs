@@ -532,7 +532,6 @@ async function emit(name, title, h, body) {
 function careerTimeline(y, start) {
   const S = 12;
   const CW = M.width('M', S);
-  const LABEL = 24;
   const t0 = [2023, 9];
   const mi = (y, m) => (y - t0[0]) * 12 + (m - t0[1]);
   const PER = 2;
@@ -551,8 +550,10 @@ function careerTimeline(y, start) {
     ['SWM', 'New Expensify', [2025, 7], [2026, 6], T.blue],
     ['ion-tracks', 'thesis -> v3', [2025, 11], null, T.green],
     ['PSI', 'rad. metrology', [2026, 7], [2026, 9], T.orange],
-    ['freelance', 'open for work', [2026, 10], null, T.cyan],
+    ['freelance', 'client projects', [2026, 10], null, T.cyan],
   ];
+  // the label column fits the longest description, so no label pushes its bar off the axis
+  const LABEL = 11 + Math.max(...rows.map(([, desc]) => desc.length)) + 1;
   const miles = [
     [[2025, 3], 'hackathon win', T.yellow],
     [[2026, 3], 'odometer shipped', T.blue],
@@ -577,17 +578,10 @@ function careerTimeline(y, start) {
     if (b <= a) return;
     const past = Math.max(0, Math.min(b, Math.ceil(nowIdx)) - a);
     const future = b - a - past;
-    const line = spans(
-      [
-        [MB, name.padEnd(11), color],
-        [M, desc.padEnd(LABEL - 11), T.dim],
-        [M, ' '.repeat(a * PER), T.fg],
-        [M, '█'.repeat(past * PER), color],
-        [M, '░'.repeat(future * PER), color],
-      ],
-      S,
-      { x: PAD, y },
-    );
+    // the bar is placed by its own x, so it lines up with the axis whatever the label width
+    const line =
+      spans([[MB, name.padEnd(11), color], [M, desc, T.dim]], S, { x: PAD, y }) +
+      spans([[M, '█'.repeat(past * PER), color], [M, '░'.repeat(future * PER), color]], S, { x: X(a), y });
     body += show(t + i * 0.08, line);
     y += 22;
   });
