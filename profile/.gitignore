@@ -1,0 +1,6 @@
+node_modules/
+
+# fetched stats, line counts and font subsets; only the two hand-made inputs are tracked
+.cache/*
+!.cache/ascii-hd.json
+!.cache/career-graph.txt

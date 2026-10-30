@@ -1,0 +1,67 @@
+name: Refresh profile
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "profile/**"
+      - "!profile/assets/**"
+      - ".github/workflows/profile.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-profile
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: profile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: profile/package-lock.json
+
+      - run: npm ci
+
+      # fonts and per-commit line counts carry over between runs, so only new commits are fetched
+      - uses: actions/cache@v4
+        with:
+          path: |
+            profile/.cache/fonts
+            profile/.cache/lines-cache-v2.json
+          key: profile-cache-${{ github.run_id }}
+          restore-keys: profile-cache-
+
+      - name: Build the windows with fresh stats
+        env:
+          PROFILE_OWNER: ${{ github.repository_owner }}
+          # A fine-grained read-only PAT sees the private repos (IonTracks, Autark);
+          # without it the build still runs on GITHUB_TOKEN, with public data only.
+          PROFILE_STATS_TOKEN: ${{ secrets.PROFILE_STATS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run refresh
+
+      - name: Commit changed windows
+        run: |
+          git add assets
+          if git diff --cached --quiet; then
+            echo "No changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(profile): refresh stats"
+          git push

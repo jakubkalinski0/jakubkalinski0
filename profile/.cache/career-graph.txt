@@ -1,0 +1,27 @@
+* [33m2d26dbd[m[m[1;36mHEAD[m[33m -> [m[1;32mmain[mfeat(iontracks3): full-fledged recombination simulator with new RDD modelOct 2026
+*   [33m2ade38a[m[mMerge branch 'psi'Sep 2026
+[32m|[m[33m\[m  
+[32m|[m * [33m9f176d0[m[m[1;32mpsi[mperf(psi/axitracks): 6,027x faster than IonTracks-FEniCSxSep 2026
+[32m|[m * [33m6da0ecf[m[mfix(psi/IonTracks-FEniCSx): stale MPI ghost entries blew densities up to 1e86Aug 2026
+[32m|[m * [33mbd8634f[m[mfeat(psi): join PSI, Radiation Metrology Group, VilligenJul 2026
+[32m|[m[32m/[m  
+*   [33m719eb74[m[mMerge branch 'swm'Jun 2026
+[34m|[m[35m\[m  
+* [35m\[m   [33mcc3dcff[m[mMerge branch 'wrss'Jun 2026
+[36m|[m[1;31m\[m [35m\[m  
+* [1;31m|[m [35m|[m [33md4f1597[m[mdocs(kukdm): talk on FEM ion recombination on PLGridApr 2026
+[1;31m|[m [1;31m|[m * [33mf4b4166[m[m[1;32mswm[mfeat(swm/odometer): odometer expenses shipped to all usersMar 2026
+[1;31m|[m [1;31m|[m * [33m75792d8[m[mfeat(swm/mfa): biometric transaction approval, Expensify Cards UK/EUFeb 2026
+* [1;31m|[m [1;31m|[m [33m3ea1a0e[m[mfeat(thesis): IonTracks: ion recombination on HPCNov 2025
+* [1;31m|[m [1;31m|[m   [33m1b216f4[m[mMerge branch 'bit'Oct 2025
+[1;32m|[m[1;33m\[m [1;31m\[m [1;31m\[m  
+[1;32m|[m [1;33m|[m [1;31m|[m * [33mcc70cc2[m[mfeat(swm): join Software Mansion, work on New ExpensifyJul 2025
+[1;32m|[m [1;33m|[m[1;32m_[m[1;31m|[m[1;32m/[m  
+[1;32m|[m[1;32m/[m[1;33m|[m [1;31m|[m   
+[1;32m|[m * [1;31m|[m [33m1c00faa[m[m[1;32mbit[mdocs(bit/morris): Multistage Morris AI talk at 62nd HSKKNMay 2025
+* [1;33m|[m [1;31m|[m [33m43d15bb[m[mfeat(hackathon): EcoScan wins Software Mansion HackathonMar 2025
+[1;33m|[m * [1;31m|[m [33mf123d77[m[mfeat(bit): join BIT, game theory sectionNov 2024
+[1;33m|[m[1;33m/[m [1;31m/[m  
+[1;33m|[m * [33m314eb0f[m[m[1;32mwrss[mfeat(wrss): join the WRSS WI AGH board, faculty student councilOct 2024
+[1;33m|[m[1;33m/[m  
+* [33m7dadd2f[m[minit(agh): B.Eng. Computer Science, AGH KrakówOct 2023
