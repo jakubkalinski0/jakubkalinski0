@@ -6,7 +6,6 @@ import { text, spans, svgDoc, writeFile } from '../lib/svg.mjs';
 import { spinMarkup } from '../lib/spin.mjs';
 import { getStats, fmt } from '../lib/data.mjs';
 import { getActivity } from '../lib/activity.mjs';
-import { getExtras, PROJECT_REPOS } from '../lib/extras.mjs';
 
 const OUT = process.env.THEME_OUT
   ? process.env.THEME_OUT.replace(/[\\/]?$/, process.platform === 'win32' ? '\\' : '/')
@@ -556,7 +555,6 @@ function careerTimeline(y, start) {
   const LABEL = 11 + Math.max(...rows.map(([, desc]) => desc.length)) + 1;
   const miles = [
     [[2025, 3], 'hackathon win', T.yellow],
-    [[2026, 3], 'odometer shipped', T.blue],
     [[2026, 4], 'KU KDM talk', T.green],
   ].filter(([[yy, mm]]) => at(yy, mm) >= 0);
   let body = '';
@@ -616,64 +614,6 @@ function careerTimeline(y, start) {
       text(MB, 10, 'now', { x: nx, y: top - 26, fill: T.green, anchor: 'middle' }),
   );
   return { body, y, t: t + 1.7 };
-}
-
-// ---------------------------------------------------------------- career as a real branched git log
-// .cache/career-graph.txt is genuine `git log --graph` output (.cache/career-graph.mjs), with git's lane colours.
-function careerGraph(y, start) {
-  const KIND = { feat: T.green, fix: T.red, perf: T.orange, docs: T.blue, init: T.magenta };
-  const ANSI = { 31: T.red, 32: T.green, 33: T.yellow, 34: T.blue, 35: T.magenta, 36: T.cyan };
-  const log = fs.readFileSync(new URL('../.cache/career-graph.txt', import.meta.url), 'utf8').trimEnd().split('\n');
-  const SGR = /\x1b\[[0-9;]*m/g;
-  const clean = (str) => str.replace(SGR, '');
-  const S = 13;
-  const ROW = 21;
-  let body = '';
-  const c1 = typed(y, 'git log --graph --all --decorate --oneline', start, 0.035);
-  body += c1.svg;
-  const t0 = c1.end + 0.2;
-  y += 32;
-  log.forEach((raw, i) => {
-    const [lead, refs = '', subject = '', date = ''] = raw.split('\x1f');
-    const hash = raw.includes('\x1f') ? clean(lead).match(/[0-9a-f]{7}$/)[0] : '';
-    // graph characters in git's colours, up to where the hash starts
-    const graphLen = clean(lead).length - hash.length;
-    const parts = [];
-    let fill = T.fg;
-    let seen = 0;
-    for (const tok of lead.split(/(\x1b\[[0-9;]*m)/)) {
-      if (!tok || seen >= graphLen) continue;
-      const code = tok.match(/^\x1b\[(?:1;)?(\d*)m$/);
-      if (code) fill = ANSI[code[1]] ?? T.fg;
-      else {
-        const piece = tok.slice(0, graphLen - seen);
-        parts.push([MB, piece, fill]);
-        seen += piece.length;
-      }
-    }
-    let line = '';
-    if (hash) {
-      parts.push([M, `${hash} `, T.yellow]);
-      const r = clean(refs);
-      if (r) {
-        parts.push([M, '(', T.yellow]);
-        r.split(', ').forEach((ref, k) => {
-          if (k) parts.push([M, ', ', T.yellow]);
-          const [head, branch] = ref.split(' -> ');
-          if (branch) parts.push([MB, head, T.cyan], [M, ' -> ', T.yellow], [MB, branch, T.green]);
-          else parts.push([MB, ref, T.green]);
-        });
-        parts.push([M, ') ', T.yellow]);
-      }
-      const m = subject.match(/^(\w+)(\([^)]*\)): (.*)$/);
-      if (m) parts.push([MB, m[1], KIND[m[1]] ?? T.fg], [M, `${m[2]}: `, T.dim], [M, m[3], T.fg]);
-      else parts.push([M, subject, T.dim]);
-      line = text(M, 12, clean(date), { x: W - PAD, y, fill: T.dim, anchor: 'end' });
-    }
-    body += show(t0 + i * 0.05, spans(parts, S, { x: PAD, y }) + line);
-    y += ROW;
-  });
-  return { body, y, t: t0 + log.length * 0.05 };
 }
 
 // ---------------------------------------------------------------- contributions
@@ -896,71 +836,21 @@ function tokei(y, start) {
   return { body, y: y + 30, t: t + 0.3 + rows.length * 0.12 };
 }
 
-const extras = await getExtras();
-
-// ls -la of pinned projects, with live stars and last push
-function projects(y, start) {
-  const LANGC = { Python: T.blue, TypeScript: T.teal, JavaScript: T.yellow };
-  // descriptions from the current list, not the cached copy in extras.json
-  const DESC = Object.fromEntries(PROJECT_REPOS);
-  const S = 12;
-  let body = '';
-  const c = typed(y, 'ls -la ~/projects', start, 0.05);
-  body += c.svg;
-  let t = c.end + 0.25;
-  y += 32;
-  body += show(t, text(M, S, `total ${extras.repos.length}`, { x: PAD, y, fill: T.dim }));
-  y += 22;
-  const k = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
-  // like ls: time of day for recent entries, year for older ones
-  const date = (iso) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const md = d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', timeZone: 'Europe/Warsaw' });
-    const recent = Date.now() - d < 182 * 864e5;
-    return `${md} ${recent ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Warsaw' }) : ' ' + d.getUTCFullYear()}`;
-  };
-  extras.repos.forEach((r, i) => {
-    const disp = (r.full === 'Expensify/App' ? 'expensify-app' : r.name) + '/';
-    body += show(
-      t + 0.1 + i * 0.1,
-      spans(
-        [
-          [M, r.private ? 'drwx------  ' : 'drwxr-xr-x  ', r.private ? T.red : T.dim],
-          [M, '* ', T.yellow],
-          [M, k(r.stars).padEnd(5), T.yellow],
-          [M, r.lang.padEnd(11), LANGC[r.lang] ?? T.sub],
-          [M, date(r.pushedAt).padEnd(13), T.dim],
-          [MB, disp.padEnd(24), T.blue],
-          [M, `# ${DESC[r.full] ?? r.desc}`, T.dim],
-        ],
-        S,
-        { x: PAD, y },
-      ),
-    );
-    y += 22;
-  });
-  return { body, y, t: t + 0.1 + extras.repos.length * 0.1 };
-}
-
 // ---------------------------------------------------------------- composed windows
 // Several commands in one terminal, run one after another.
 const GAP = 22;
 
 {
   const tl = careerTimeline(36 + 34, 0.3);
-  // the legend sits right on the timeline's last line, so the next prompt needs extra air
-  const g = careerGraph(tl.y + GAP + 18, tl.t + 0.3);
-  const H = g.y + 26;
-  await emit('career', 'career --timeline and git log --graph --all: AGH, WRSS, BIT, Software Mansion, IonTracks, PSI, freelance', H, chrome(H, 'jakub@krakow: ~/career (main)') + tl.body + g.body);
+  const H = tl.y + 26;
+  await emit('career', 'career --timeline: AGH, WRSS, BIT, Software Mansion, IonTracks, PSI, freelance', H, chrome(H, 'jakub@krakow: ~/career') + tl.body);
 }
 
 {
   const c = contribGraph(36 + 34, 0.4);
   const tk = tokei(c.y + GAP, c.t + 0.3);
-  const pr = projects(tk.y + GAP, tk.t + 0.3);
-  const H = pr.y + 14;
-  await emit('contrib', `${fmt(act.yearTotal)} contributions in the last year, ${fmt(act.totals.contributions)} total; lines by language; projects`, H, chrome(H, 'jakub@krakow: ~ — gh') + c.body + tk.body + pr.body);
+  const H = tk.y + 6;
+  await emit('contrib', `${fmt(act.yearTotal)} contributions in the last year, ${fmt(act.totals.contributions)} total; lines by language`, H, chrome(H, 'jakub@krakow: ~ — gh') + c.body + tk.body);
 }
 
 console.log('c-terminal done');
