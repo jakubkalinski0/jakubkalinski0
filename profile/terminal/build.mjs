@@ -1,9 +1,7 @@
 // Variant C: "Terminal", neofetch + git log in Tokyo Night colours, typed out on load.
-import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadFont } from '../lib/fonts.mjs';
 import { text, spans, svgDoc, writeFile } from '../lib/svg.mjs';
-import { spinMarkup } from '../lib/spin.mjs';
 import { getStats, fmt } from '../lib/data.mjs';
 import { getActivity } from '../lib/activity.mjs';
 
@@ -13,13 +11,6 @@ const OUT = process.env.THEME_OUT
 const act = await getActivity();
 // stars and followers (public repos only)
 const stats = await getStats();
-const paletteId = process.env.PALETTE || 'tokyo';
-// Avatar recoloured into this palette (.cache/portrait-img.mjs), embedded so GitHub renders it.
-// A palette with `ascii` draws that coloured ascii (.cache/ascii-hd.mjs) instead.
-const cached = (file) => new URL(`../.cache/${file}`, import.meta.url);
-const themedPortrait = cached(`portrait-${paletteId}.webp`);
-const portrait = () =>
-  `data:image/webp;base64,${fs.readFileSync(fs.existsSync(themedPortrait) ? themedPortrait : cached('portrait-tokyo.webp')).toString('base64')}`;
 
 const M = await loadFont('JetBrains Mono', 400);
 const MB = await loadFont('JetBrains Mono', 700);
@@ -93,7 +84,6 @@ const PALETTES = {
   },
   lava: {
     name: 'Lava',
-    ascii: 'ascii-hd.json',
     bg: '#140404', bar: '#1f0806', border: '#6a2014', track: '#2c100c',
     fg: '#ffe6d4', dim: '#c08068', sub: '#f6c8b0',
     blue: '#7fd0ff', cyan: '#ffd0b0', green: '#ffd24a', magenta: '#ff5c8a',
@@ -435,28 +425,9 @@ async function emit(name, title, h, body) {
   body += c1.svg;
   let t = c1.end + 0.25;
 
-  // the avatar, in this palette's colours
-  const top = y + 22;
-  const ay = top - 2;
-  const artW = 290;
-  const artH = 290;
-  if (T.ascii) {
-    // coloured ascii of the original picture, straight on the window like a neofetch logo
-    const art = JSON.parse(fs.readFileSync(cached(T.ascii), 'utf8'));
-    body += show(
-      t,
-      spinMarkup(art, {
-        x: PAD + (artW - art.cols * art.cw) / 2,
-        y: ay + (artH - art.rows * art.lh) / 2,
-        font: art.weight === 700 ? MB : M,
-      }),
-    );
-  } else {
-    body += show(t, `<image x="${PAD}" y="${ay}" width="${artW}" height="${artH}" href="${portrait()}"/>`);
-  }
-
-  // info column
-  const ix = PAD + artW + 28;
+  // info column, without a logo or avatar beside it
+  const top = y + 30;
+  const ix = PAD;
   const info = [
     ['Role', 'Full-stack & Research/HPC Software Engineer'],
     ['Work 2', 'PSI Radiation Metrology · Jul 2026 -> Sep 2026'],
@@ -504,7 +475,7 @@ async function emit(name, title, h, body) {
     if (sx - 18 > W - PAD) console.warn('  neofetch: status bar runs past the window');
     body += show(t + 0.8, bar);
   }
-  y = Math.max(ay + artH, iy + 12) + 30;
+  y = iy + 12 + 30;
   t += 1.4;
 
   const c2 = typed(y, 'cat now.md', t);
